@@ -233,6 +233,29 @@ export async function signRequest(
     clientId: identity.clientId,
     timestamp: String(timestamp),
     nonce,
-    signatureHex: toHex(sig),
+    // The server enforces canonical LOW-s ECDSA signatures (anti-malleability);
+    // WebCrypto emits high-s ~half the time, so normalize before sending.
+    signatureHex: toHex(normalizeLowS(sig)),
   };
+}
+
+// secp256r1 (P-256) group order n, and n/2.
+const P256_N = 0xffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551n;
+const P256_HALF_N = P256_N >> 1n;
+
+// Normalize a 64-byte raw r‖s ECDSA signature to low-s: if s > n/2, replace s
+// with n − s (r is unchanged). Both encodings verify the same message, but the
+// server only accepts the canonical low-s form, so every client must normalize.
+function normalizeLowS(sig: Uint8Array): Uint8Array {
+  if (sig.length !== 64) return sig;
+  let s = 0n;
+  for (let i = 32; i < 64; i++) s = (s << 8n) | BigInt(sig[i]);
+  if (s <= P256_HALF_N) return sig;
+  let v = P256_N - s;
+  const out = sig.slice();
+  for (let i = 63; i >= 32; i--) {
+    out[i] = Number(v & 0xffn);
+    v >>= 8n;
+  }
+  return out;
 }
