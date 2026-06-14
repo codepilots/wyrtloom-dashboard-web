@@ -8,7 +8,9 @@
 //
 // Field order (after the domain tag):
 //   1. method        — UTF-8 (e.g. "POST", "GET")
-//   2. path          — UTF-8, path only, NO query string
+//   2. path          — UTF-8, full path + query string (the server canonicalizes
+//                      over the request URI's path_and_query, so the query is
+//                      signed too — do NOT strip it)
 //   3. body_sha256   — 32 raw bytes (SHA-256 of the request body bytes)
 //   4. client_id     — UTF-8
 //   5. timestamp     — i64 Unix seconds as 8 bytes big-endian two's-complement

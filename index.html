@@ -3,6 +3,12 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!--
+      Defense-in-depth CSP fallback. The serving layer SHOULD also send CSP plus
+      X-Content-Type-Options: nosniff as response headers (more robust than this
+      meta, and `frame-ancestors` is only honored via header). See README.
+    -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'" />
     <title>Wyrtloom Dashboard</title>
   </head>
   <body>

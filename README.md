@@ -59,8 +59,9 @@ client**. The design follows the project's security audit:
   `x-wyrtloom-nonce` (fresh random per request), and `x-wyrtloom-signature`
   (lowercase hex of the 64-byte raw r‖s signature). The signature is computed
   over a length-prefixed canonical message (`src/crypto/canonical.ts`) covering
-  the method, URL **path** (no query string), SHA-256 of the body, client_id,
-  timestamp, and nonce — byte-for-byte matching the Rust server. The golden
+  the method, full URL **path + query string** (the server canonicalizes over the
+  request URI's `path_and_query`, so the query is signed too), SHA-256 of the
+  body, client_id, timestamp, and nonce — byte-for-byte matching the Rust server. The golden
   interop vector is asserted by `src/crypto/canonical.test.ts` (`npm test`).
 - **Session token in memory only.** `POST /api/login {username,password}` returns
   a bearer token, which is kept in React state/context and sent as
@@ -75,6 +76,21 @@ client**. The design follows the project's security audit:
 - **No XSS sinks.** All server-provided strings (task titles, history, config
   values, log/audit detail) are rendered as inert text — React escapes them. The
   app uses **no** `dangerouslySetInnerHTML`.
+
+### Security response headers (serving layer)
+
+`index.html` ships a `Content-Security-Policy` `<meta>` tag as a defense-in-depth
+fallback. The serving layer (reverse proxy / static host fronting the SPA) **should
+also** send these as HTTP **response headers**, which are more robust than the
+meta tag:
+
+- `Content-Security-Policy: default-src 'self'; script-src 'self'; object-src
+  'none'; base-uri 'none'; frame-ancestors 'none'`
+- `X-Content-Type-Options: nosniff`
+
+Note that `frame-ancestors` is **only** honored when delivered via a response
+header — the `<meta>` form is ignored for that directive — so the header is
+required to actually deny framing/clickjacking.
 
 ### Deployment requirement (API side)
 

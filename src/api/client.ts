@@ -107,8 +107,11 @@ export async function request<T>(
   }
 
   // Attach the P-256 client signature over the canonical request. Signed across
-  // the URL PATH ONLY (no query string) and the exact body bytes — matching the
-  // server's canonicalizer. We derive the path from the resolved request URL so
+  // the full URL PATH + QUERY STRING (the server canonicalizes over the request
+  // URI's path_and_query) and the exact body bytes — matching the server's
+  // canonicalizer. Do NOT strip the query here: it is integrity-protected, so
+  // dropping it would break signing for requests like `GET /api/board?states=`.
+  // We derive the path from the resolved request URL so
   // it matches what the server sees, whether API_BASE is `/api` or a full
   // origin. /enroll is the one route that is NOT signed (it is how a brand-new
   // client first authorizes), but it never flows through here.
