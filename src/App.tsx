@@ -1,5 +1,6 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { SessionProvider } from './auth/SessionContext';
+import { EnrollGate } from './auth/EnrollGate';
 import { Layout } from './components/Layout';
 import { RequireAuth } from './components/RequireAuth';
 import { Login } from './views/Login';
@@ -12,6 +13,7 @@ import { Audit } from './views/Audit';
 export default function App() {
   return (
     <SessionProvider>
+      <EnrollGate>
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<Login />} />
@@ -53,6 +55,7 @@ export default function App() {
           <Route path="*" element={<Navigate to="/board" replace />} />
         </Routes>
       </BrowserRouter>
+      </EnrollGate>
     </SessionProvider>
   );
 }

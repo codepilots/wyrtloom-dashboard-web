@@ -1,16 +1,21 @@
 // Central fetch wrapper for the wyrtloom-dashboard-api.
 //
-// Security model (see README): the browser is a SAME-ORIGIN, SESSION-ONLY
-// client. It holds the bearer session token IN MEMORY only (never
-// localStorage/sessionStorage) and sends it as `Authorization: Bearer <token>`.
-// It does NOT sign requests with a client key and embeds no API key/secret.
+// Security model (see README): the browser is a SAME-ORIGIN client that holds
+// the bearer session token IN MEMORY only (never localStorage/sessionStorage)
+// and sends it as `Authorization: Bearer <token>`. It is ALSO a real signing
+// client: every request (except /enroll) carries a P-256 client signature in
+// the x-wyrtloom-* headers, computed from a NON-EXTRACTABLE WebCrypto key (see
+// src/crypto/clientKey.ts). The signing key never leaves the browser.
 //
 // 401 (auth/session expired) and 403 (RBAC) are surfaced as typed errors so the
 // UI can route to re-login or show "not authorized" without leaking detail.
 
-const API_BASE: string =
-  (import.meta.env.VITE_API_BASE as string | undefined)?.replace(/\/$/, '') ??
-  '/api';
+import { signRequest } from '../crypto/clientKey';
+import { API_BASE, parseError } from './config';
+
+// Reused for both signing the body and parsing JSON error envelopes; one
+// module-level encoder avoids re-allocating per request.
+const textEncoder = new TextEncoder();
 
 export class ApiError extends Error {
   readonly status: number;
@@ -61,15 +66,11 @@ function buildUrl(path: string, query?: RequestOptions['query']): string {
   return qs ? `${url}?${qs}` : url;
 }
 
-async function parseError(res: Response): Promise<string> {
-  // The API returns { "error": "<msg>" } on failures. Fall back to status text.
-  try {
-    const body = (await res.json()) as { error?: unknown };
-    if (body && typeof body.error === 'string') return body.error;
-  } catch {
-    // non-JSON body; ignore
-  }
-  return res.statusText || `HTTP ${res.status}`;
+// The path (no query string) the server canonicalizes over. The signature
+// covers the URL path only; we resolve relative URLs against the page origin to
+// extract a clean pathname regardless of whether API_BASE is `/api` or absolute.
+function signedPath(url: string): string {
+  return new URL(url, window.location.origin).pathname;
 }
 
 export async function request<T>(
@@ -80,21 +81,53 @@ export async function request<T>(
   const headers: Record<string, string> = { Accept: 'application/json' };
   if (token) headers['Authorization'] = `Bearer ${token}`;
 
-  let body: BodyInit | undefined;
+  // Serialise the body to a string first so we can both send it and hash its
+  // exact bytes for the client signature (the server signs over the raw body).
+  let bodyText = '';
   if (opts.rawBody !== undefined) {
-    body = opts.rawBody;
+    bodyText = opts.rawBody;
     headers['Content-Type'] = opts.contentType ?? 'text/plain';
   } else if (opts.json !== undefined) {
-    body = JSON.stringify(opts.json);
+    bodyText = JSON.stringify(opts.json);
     headers['Content-Type'] = 'application/json';
   }
+  const hasBody = opts.rawBody !== undefined || opts.json !== undefined;
+  const bodyBytes = textEncoder.encode(bodyText);
+  const method = opts.method ?? 'GET';
+  const fullUrl = buildUrl(path, opts.query);
+
+  // Honor an already-aborted signal before doing any work: signing is async
+  // (IndexedDB load + WebCrypto) and would otherwise complete and emit a fully
+  // signed request — consuming a server nonce — for a request the caller has
+  // already abandoned.
+  if (opts.signal?.aborted) {
+    throw new DOMException('The operation was aborted.', 'AbortError');
+  }
+
+  // Attach the P-256 client signature over the canonical request. Signed across
+  // the URL PATH ONLY (no query string) and the exact body bytes — matching the
+  // server's canonicalizer. We derive the path from the resolved request URL so
+  // it matches what the server sees, whether API_BASE is `/api` or a full
+  // origin. /enroll is the one route that is NOT signed (it is how a brand-new
+  // client first authorizes), but it never flows through here.
+  const sig = await signRequest(method, signedPath(fullUrl), bodyBytes);
+
+  // Re-check after the async signing window; if aborted meanwhile, drop it
+  // rather than sending a now-unwanted signed request.
+  if (opts.signal?.aborted) {
+    throw new DOMException('The operation was aborted.', 'AbortError');
+  }
+  headers['x-wyrtloom-client'] = sig.clientId;
+  headers['x-wyrtloom-timestamp'] = sig.timestamp;
+  headers['x-wyrtloom-nonce'] = sig.nonce;
+  headers['x-wyrtloom-signature'] = sig.signatureHex;
 
   let res: Response;
   try {
-    res = await fetch(buildUrl(path, opts.query), {
-      method: opts.method ?? 'GET',
+    res = await fetch(fullUrl, {
+      method,
       headers,
-      body,
+      body: hasBody ? bodyText : undefined,
       signal: opts.signal,
       // Same-origin only; never send ambient credentials cross-origin.
       credentials: 'same-origin',

@@ -7,6 +7,14 @@ to it over JSON.
 
 ## Views
 
+- **Enroll** (first run only) — before the app can call the API, this browser
+  registers itself as a signing client. It generates a **non-extractable**
+  WebCrypto ECDSA P-256 keypair, stores it in IndexedDB, and `POST`s its public
+  key to `/api/enroll` with an operator-supplied **single-use bootstrap API
+  key**. The operator obtains this key from the server (the API / `clientauth`
+  layer issues single-use enrollment keys). The bootstrap key is used **once**
+  and is never persisted by the app. After enrollment every request is signed
+  (see security model below); this screen does not appear again on this device.
 - **Login** — username/password sign-in. The returned bearer session token is
   held **in memory only** (see security model below).
 - **Board** — the 7 kanban columns (Backlog → Todo → Ready → Running → Blocked →
@@ -31,12 +39,29 @@ message.
 
 ## Security model (important)
 
-This SPA is a **same-origin, session-only** client. The design follows the
-project's security audit:
+This SPA is a **same-origin** client that is **also a real request-signing
+client**. The design follows the project's security audit:
 
-- **No client secret / API key in the browser.** The SPA does **not** perform the
-  API's ed25519 client-auth request signing and embeds **no** API key or bootstrap
-  credential. There is nothing secret in the shipped bundle.
+- **No secret in the shipped bundle.** No API key, bootstrap credential, or
+  signing key is baked into the build. The bootstrap API key is entered by the
+  operator at runtime, used once for enrollment, and never persisted.
+- **Non-extractable client signing key.** On first run the SPA generates an
+  ECDSA **P-256** keypair with `extractable: false` and stores the
+  `CryptoKeyPair` (plus the server-assigned `client_id`) in **IndexedDB**.
+  Non-extractable keys are structured-cloneable and survive reloads, yet their
+  private bytes can **never** be read back — even XSS can only ask the browser to
+  sign, not exfiltrate the key. This satisfies the API's client-auth layer
+  (`wyrtloom-clientauth-tofu`), which verifies a P-256 signature on every
+  non-enroll route.
+- **Per-request P-256 signatures.** Every request except `/api/enroll` (including
+  the ClientOnly `/api/login`) carries four lowercase headers:
+  `x-wyrtloom-client` (client_id), `x-wyrtloom-timestamp` (Unix seconds),
+  `x-wyrtloom-nonce` (fresh random per request), and `x-wyrtloom-signature`
+  (lowercase hex of the 64-byte raw r‖s signature). The signature is computed
+  over a length-prefixed canonical message (`src/crypto/canonical.ts`) covering
+  the method, URL **path** (no query string), SHA-256 of the body, client_id,
+  timestamp, and nonce — byte-for-byte matching the Rust server. The golden
+  interop vector is asserted by `src/crypto/canonical.test.ts` (`npm test`).
 - **Session token in memory only.** `POST /api/login {username,password}` returns
   a bearer token, which is kept in React state/context and sent as
   `Authorization: Bearer <token>`. It is **never** written to `localStorage`,
@@ -53,18 +78,16 @@ project's security audit:
 
 ### Deployment requirement (API side)
 
-Because the browser does not sign requests, the API must be **deployed to trust
-this SPA as a same-origin client**. In practice:
-
 - Serve the built SPA and the API under the **same origin** (e.g. a reverse proxy
   that fronts `wyrtloom-dashboard-api` on loopback and serves the static `dist/`
   at the same host), and add that origin to the API's exact-match
   `--cors-origin` allowlist so credentialed session requests are accepted.
-- The API's client-application auth layer (TOFU ed25519 signing) is intended for
-  non-browser clients that can safely hold a signing key. For the browser client,
-  that layer is expected to be satisfied at the trusted edge (e.g. the reverse
-  proxy / gateway enrolls and signs on behalf of same-origin SPA traffic), **not**
-  inside the browser. Do not ship a signing key to the browser.
+- The API's client-application auth layer (`wyrtloom-clientauth-tofu`) is
+  satisfied **directly by the browser**: the SPA enrolls its non-extractable
+  P-256 key and signs each request itself. No edge signing component is needed,
+  and no signing key is shipped in the bundle — the key is generated in, and
+  never leaves, the browser. The operator must hand the first-run user a
+  single-use bootstrap API key to complete enrollment.
 
 `VITE_API_BASE` controls the base URL the SPA calls (default `/api`,
 same-origin). Point it elsewhere **only** if that origin is on the API's CORS
