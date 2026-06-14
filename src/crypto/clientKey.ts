@@ -194,7 +194,8 @@ function freshNonce(): string {
 /**
  * Sign a request. Builds the canonical bytes for (method, path, body) using the
  * enrolled identity and a fresh timestamp + nonce, then signs them with the
- * non-extractable private key. `path` MUST be the URL path only (no query string).
+ * non-extractable private key. `path` is the URL path + query string exactly as
+ * sent (the server canonicalizes over path_and_query).
  * `bodyBytes` is the exact request body (empty array for no body).
  */
 export async function signRequest(

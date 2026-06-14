@@ -66,11 +66,13 @@ function buildUrl(path: string, query?: RequestOptions['query']): string {
   return qs ? `${url}?${qs}` : url;
 }
 
-// The path (no query string) the server canonicalizes over. The signature
-// covers the URL path only; we resolve relative URLs against the page origin to
-// extract a clean pathname regardless of whether API_BASE is `/api` or absolute.
+// The path + query the server canonicalizes over (it uses the request URI's
+// path_and_query), so query parameters are integrity-protected. We resolve
+// relative URLs against the page origin to extract a clean `pathname + search`
+// regardless of whether API_BASE is `/api` or absolute.
 function signedPath(url: string): string {
-  return new URL(url, window.location.origin).pathname;
+  const u = new URL(url, window.location.origin);
+  return u.pathname + u.search;
 }
 
 export async function request<T>(
