@@ -55,7 +55,14 @@ export function setUnauthorizedHandler(fn: (() => void) | null): void {
   onUnauthorized = fn;
 }
 
-function buildUrl(path: string, query?: RequestOptions['query']): string {
+// Build the request URL. Query values MUST be passed via `query` here so they go
+// through `URLSearchParams` and never hand-concatenated into `path`: the signed
+// bytes are computed over the EXACT encoded `path + query` string that is sent
+// (see `signedPath` and `request`), so a hand-built query that encodes
+// differently from what `URLSearchParams`/the browser ultimately sends would
+// produce a signed-vs-sent mismatch and a self-inflicted 401. Exported for the
+// round-trip interop test in src/crypto/ (do not change its encoding lightly).
+export function buildUrl(path: string, query?: RequestOptions['query']): string {
   const url = `${API_BASE}${path}`;
   if (!query) return url;
   const params = new URLSearchParams();
@@ -69,8 +76,13 @@ function buildUrl(path: string, query?: RequestOptions['query']): string {
 // The path + query the server canonicalizes over (it uses the request URI's
 // path_and_query), so query parameters are integrity-protected. We resolve
 // relative URLs against the page origin to extract a clean `pathname + search`
-// regardless of whether API_BASE is `/api` or absolute.
-function signedPath(url: string): string {
+// regardless of whether API_BASE is `/api` or absolute. The returned string is
+// signed AND is the path portion of the URL we fetch, so the signed bytes are
+// over the exact `pathname + search` sent — this is why queries must be built
+// via `buildUrl`/`URLSearchParams` and never hand-concatenated (a divergent
+// encoding would sign one string and send another → self-inflicted 401). The
+// round-trip invariant is locked by the test in src/crypto/. Exported for it.
+export function signedPath(url: string): string {
   const u = new URL(url, window.location.origin);
   return u.pathname + u.search;
 }

@@ -109,6 +109,17 @@ Key integrity details:
 - **The query string is signed** — `signedPath()` in `api/client.ts` derives
   `pathname + search` from the resolved URL and does not strip the query (the
   server canonicalizes over the request URI's `path_and_query`).
+- **Query values MUST be built via `URLSearchParams`, never hand-concatenated.**
+  The signed bytes are computed over the **exact** encoded `path + query` string
+  that is sent (`signedPath` returns the path portion of the URL we both sign and
+  fetch). A hand-built query string that encodes differently from what the
+  browser ultimately sends would sign one string and transmit another — a
+  signed-vs-sent mismatch and a self-inflicted **401**. All query construction
+  therefore goes through `buildUrl` (`URLSearchParams`) in `api/client.ts`, and a
+  round-trip interop test (`src/crypto/query-signing.test.ts`) asserts
+  `signed path === sent path` over a real query (`?states=Todo,Running`) so a
+  future strip/re-encode is caught in CI. The golden vector
+  (`canonical.test.ts`) has no query, so it would not catch this on its own.
 - The signature is sent as four lowercase headers: `x-wyrtloom-client`,
   `x-wyrtloom-timestamp`, `x-wyrtloom-nonce` (fresh 16 random bytes per request,
   `freshNonce`), and `x-wyrtloom-signature` (lowercase hex of the 64-byte raw
@@ -222,6 +233,9 @@ Error routing surfaces 401 vs 403 as typed `ApiError`s (`api/client.ts`,
 - `src/crypto/clientKey.ts` — key generation, IndexedDB persistence, enrollment,
   request signing, low-s normalization.
 - `src/crypto/canonical.ts` — byte-exact canonical request encoder.
+- `src/crypto/canonical.test.ts` — golden interop vector for the encoder.
+- `src/crypto/query-signing.test.ts` — query round-trip guard (signed path ===
+  sent path; locks the `URLSearchParams`-only invariant).
 - `src/api/client.ts` — central fetch wrapper, signing integration, token header,
   401/403 handling, same-origin credentials.
 - `src/auth/SessionContext.tsx`, `src/auth/session-context.ts` — in-memory session
