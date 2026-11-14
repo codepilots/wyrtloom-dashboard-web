@@ -7,6 +7,7 @@ import type {
   AuditResponse,
   BoardResponse,
   ConfigResponse,
+  ExecuteResponse,
   LoginResponse,
   LogsResponse,
   PluginsResponse,
@@ -89,6 +90,21 @@ export function blockTask(
     `/tasks/${encodeURIComponent(id)}/block`,
     token,
     { method: 'POST', json: { reason } },
+  );
+}
+
+// Run an existing task through the configured LLM provider. The server
+// claims the task, runs the shared pipeline, and transitions it Done/Blocked.
+// An omitted prompt defaults to the task's title server-side.
+export function executeTask(
+  token: string,
+  id: string,
+  prompt?: string,
+): Promise<ExecuteResponse> {
+  return request<ExecuteResponse>(
+    `/tasks/${encodeURIComponent(id)}/execute`,
+    token,
+    { method: 'POST', json: { prompt: prompt || null } },
   );
 }
 

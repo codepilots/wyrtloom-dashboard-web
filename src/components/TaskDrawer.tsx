@@ -3,7 +3,12 @@ import * as api from '../api/endpoints';
 import { useToken } from '../auth/session-context';
 import { Banner } from './Banner';
 import { errorMessage } from '../lib/errors';
-import { TASK_STATES, type Task, type TaskState } from '../api/types';
+import {
+  TASK_STATES,
+  type ExecuteResponse,
+  type Task,
+  type TaskState,
+} from '../api/types';
 
 interface TaskDrawerProps {
   task: Task;
@@ -18,6 +23,19 @@ function blockedByText(b: Task['block_reason']): string {
   return `dependency: ${b.blocked_by.Dependency}`;
 }
 
+// Render an execute endpoint outcome as a short human line: show the result on
+// done, the reason on blocked, and a plain note on stopped.
+function formatExecute(r: ExecuteResponse): string {
+  switch (r.status) {
+    case 'done':
+      return `Done — ${r.result ?? 'no result'}`;
+    case 'blocked':
+      return `Blocked — ${r.reason ?? 'no reason given'}`;
+    case 'stopped':
+      return 'Stopped — task halted without completing';
+  }
+}
+
 export function TaskDrawer({
   task,
   canWrite,
@@ -30,6 +48,9 @@ export function TaskDrawer({
   const [to, setTo] = useState<TaskState>(task.state);
   const [reason, setReason] = useState('');
   const [blockReason, setBlockReason] = useState('');
+  // Execute: an optional prompt override plus the outcome to display.
+  const [execPrompt, setExecPrompt] = useState('');
+  const [execResult, setExecResult] = useState('');
 
   async function run(action: () => Promise<unknown>) {
     setError('');
@@ -114,6 +135,33 @@ export function TaskDrawer({
         {canWrite ? (
           <div className="actions">
             <Banner kind="error" text={error} />
+
+            <fieldset disabled={busy}>
+              <legend>Execute</legend>
+              <input
+                type="text"
+                placeholder="prompt (blank = task title)"
+                value={execPrompt}
+                onChange={(e) => setExecPrompt(e.target.value)}
+              />
+              <button
+                type="button"
+                onClick={() =>
+                  void run(async () => {
+                    setExecResult('');
+                    const r = await api.executeTask(
+                      token,
+                      task.id,
+                      execPrompt.trim() || undefined,
+                    );
+                    setExecResult(formatExecute(r));
+                  })
+                }
+              >
+                Run task
+              </button>
+              {execResult && <p className="muted">{execResult}</p>}
+            </fieldset>
 
             <fieldset disabled={busy}>
               <legend>Transition</legend>

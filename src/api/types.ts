@@ -107,3 +107,12 @@ export interface AuditResponse {
   anchor_verified?: boolean;
   entries: unknown[];
 }
+
+// POST /api/tasks/:id/execute → the agent pipeline outcome for an existing task.
+// `status` is done/blocked/stopped; the matching payload field follows.
+export interface ExecuteResponse {
+  task_id: string;
+  status: 'done' | 'blocked' | 'stopped';
+  result?: string | null;
+  reason?: string | null;
+}
