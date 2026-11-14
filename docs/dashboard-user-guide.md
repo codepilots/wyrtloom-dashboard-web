@@ -109,6 +109,18 @@ status returned by the API's `verify_chain`. A verified chain means the audit lo
 has not been tampered with in place since it was written. Every authenticated
 request and security decision is stamped into this chain.
 
+Next to it is the **audit anchor** status, from the API's `anchor_verified`. The
+chain check alone cannot tell if the newest entries were dropped, because a
+shortened chain still verifies; the anchor is a signed record of how long the log
+should be, kept outside it.
+
+- **in step** — the anchor is present, genuine, and matches the log.
+- **CHECK FAILED** — the anchor is missing or altered, the server could not read
+  it, or it has fallen behind the log. Treat this as needing investigation even
+  when the hash-chain shows verified.
+- **not reported by this server** — the API server predates audit anchoring. This
+  is not a pass: truncation is simply not being checked.
+
 ## Authentication errors
 
 Two HTTP statuses are handled globally by the app:

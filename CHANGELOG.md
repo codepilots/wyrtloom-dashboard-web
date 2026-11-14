@@ -5,6 +5,14 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- The Audit view shows the **audit anchor** status (`anchor_verified` from
+  `GET /api/audit`) beside the hash-chain status. A failed anchor is shown as a
+  failure even when the chain verifies, which is the dropped-entries case. An API
+  server that predates anchoring omits the field; that is shown as "not reported
+  by this server", never as verified.
+
 ### Security
 
 - Dependency update to clear `npm audit` findings (was 22: 8 high, 14 moderate).
