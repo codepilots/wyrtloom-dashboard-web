@@ -3,6 +3,27 @@
 All notable changes to `wyrtloom-dashboard-web` are documented here. This project
 adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Security
+
+- Dependency update to clear `npm audit` findings (was 22: 8 high, 14 moderate).
+  - `react-router-dom` floor raised to `^7.18.5` (resolves `react-router` 7.18.5),
+    fixing the one runtime-shipped advisory set (open redirect via backslash in
+    `<Link>`/`useNavigate`, plus SSR/RSC-only issues). `npm audit --omit=dev` is now clean.
+  - `vite` → `^8.1.7` and `vitest` → `^4.1.12`; lockfile regenerated, which also
+    picks up patched transitive `postcss`, `nanoid`, `zod`, `browserslist`,
+    `brace-expansion` and `source-map-js`.
+  - **Known residual:** 9 moderate findings from one advisory, `minimatch`
+    GHSA-g3hv-75wg-m249 (glob ReDoS), inside the ESLint toolchain. The patch is
+    only in `minimatch` 11, but ESLint 10.14 (latest) requires `^10`, and npm's
+    suggested "fix" is a breaking downgrade to ESLint 9. It is dev-only (linting
+    our own source) and never ships in the bundle; revisit when ESLint moves to
+    `minimatch` 11.
+- Note: the lockfile was regenerated with npm 11 because npm 10.9.7 crashes
+  (`Cannot read properties of null (reading 'edgesOut')`) resolving the vitest
+  peer set.
+
 ## [0.1.0] - 2026-06-14
 
 ### Added
