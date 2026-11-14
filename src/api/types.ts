@@ -98,8 +98,12 @@ export interface LogsResponse {
   logs: unknown[];
 }
 
-// GET /api/audit → { chain_verified, entries }
+// GET /api/audit → { chain_verified, anchor_verified, entries }
 export interface AuditResponse {
   chain_verified: boolean;
+  // Whether the server's external audit anchor is present, genuine and in step
+  // with the chain (detects dropped entries). Absent from API servers that
+  // predate audit anchoring.
+  anchor_verified?: boolean;
   entries: unknown[];
 }

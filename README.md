@@ -30,7 +30,8 @@ to it over JSON.
   `GET|PUT /api/config`. The server re-parses and validates authoritatively.
 - **Logs** (Admin) — the call-logger entries as a table.
 - **Audit** (Admin) — the audit entries plus the `chain_verified` status returned
-  by the API's `verify_chain`.
+  by the API's `verify_chain` and the `anchor_verified` status from its
+  `verify_anchor` (shown as "not reported" by servers that predate anchoring).
 
 A top nav exposes the views the user's role can use. `401` (session expired) and
 `403` (not authorized) are handled globally: a `401` drops the in-memory token
